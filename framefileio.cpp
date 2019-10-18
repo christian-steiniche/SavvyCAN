@@ -164,6 +164,7 @@ bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache
     filters.append(QString(tr("CANHacker Trace Files (*.trc *.TRC)")));
     filters.append(QString(tr("Cabana Log (*.csv *.CSV)")));
     filters.append(QString(tr("CANOpen Magic (*.csv *.CSV)")));
+    filters.append(QString(tr("MDF4 bus logging (*.mf4 *.MF4)")));
 
     dialog.setDirectory(settings.value("FileIO/LoadSaveDirectory", dialog.directory().path()).toString());
     dialog.setFileMode(QFileDialog::ExistingFile);
@@ -204,6 +205,7 @@ bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache
         if (dialog.selectedNameFilter() == filters[17]) result = loadCANHackerFile(filename, frameCache);
         if (dialog.selectedNameFilter() == filters[18]) result = loadCabanaFile(filename, frameCache);
         if (dialog.selectedNameFilter() == filters[19]) result = loadCANOpenFile(filename, frameCache);
+        if (dialog.selectedNameFilter() == filters[20]) result = loadMF4File(filename, frameCache);
 
         progress.cancel();
 
@@ -413,6 +415,16 @@ bool FrameFileIO::autoDetectLoadFile(QString filename, QVector<CANFrame>* frames
         if (loadGenericCSVFile(filename, frames))
         {
             qDebug() << "Loaded as generic CSV successfully!";
+            return true;
+        }
+    }
+    
+    qDebug() << "Attempting MDF4";
+    if (isMF4File(filename))
+    {
+        if (loadMF4File(filename, frames))
+        {
+            qDebug() << "Loaded MDF4 successfully!";
             return true;
         }
     }
@@ -934,6 +946,70 @@ bool FrameFileIO::loadCANOpenFile(QString filename, QVector<CANFrame>* frames)
             }
             else foundErrors = true;
         }
+    }
+    inFile->close();
+    delete inFile;
+    return !foundErrors;
+}
+
+bool FrameFileIO::isMF4File(QString filename)
+{
+    QFile *inFile = new QFile(filename);
+    QByteArray line;
+    bool isMatch = true;
+
+    if (!inFile->open(QIODevice::ReadOnly))
+    {
+        delete inFile;
+        return false;
+    }
+    
+    // Implement check of mdf4 bus logging format
+    isMatch = false;
+
+    inFile->close();
+    delete inFile;
+    return isMatch;
+}
+
+bool FrameFileIO::loadMF4File(QString filename, QVector<CANFrame>* frames)
+{
+    QFile *inFile = new QFile(filename);
+    CANFrame thisFrame;
+    
+    int frameCounter = 0;
+    bool foundErrors = false;
+
+    if (!inFile->open(QIODevice::ReadOnly))
+    {
+        delete inFile;
+        return false;
+    }
+    
+    for ( int i = 0 ; i < 200 ; i ++ ) {
+        
+        frameCounter++;
+        if (frameCounter > 100)
+        {
+            qApp->processEvents();
+            frameCounter = 0;
+        }
+
+        // Read frame 
+        
+        // Assign to thisFrame
+        thisFrame.bus = 0;
+        thisFrame.timestamp = 0;
+        thisFrame.ID = i;
+        thisFrame.extended = false;
+        thisFrame.isReceived = true;
+        thisFrame.remote = false;
+        thisFrame.len = 8;
+        for (int d = 0; d < thisFrame.len; d++)
+        {
+            thisFrame.data[d] = d;
+        }
+        frames->append(thisFrame);
     }
     inFile->close();
     delete inFile;
